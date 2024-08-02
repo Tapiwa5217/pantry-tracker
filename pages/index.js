@@ -1,11 +1,127 @@
 import Head from "next/head";
-import Image from "next/image";
+import React, { useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { Inter } from "next/font/google";
-import styles from "@/styles/Home.module.css";
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemText from '@mui/material/ListItemText';
+import ListSubheader from '@mui/material/ListSubheader';
+import { Container } from "@mui/material";
+import AppBar from '@mui/material/AppBar';
+import Box from '@mui/material/Box';
+import Toolbar from '@mui/material/Toolbar';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import MenuIcon from '@mui/icons-material/Menu';
+import TextField from '@mui/material/TextField';
+import { collection, addDoc, updateDoc, query, where, getDocs, doc, deleteDoc, onSnapshot, getDoc } from "firebase/firestore";
+import { db } from './firebase';  // Adjust the path according to your project structure 
+import { useMediaQuery, useTheme } from '@mui/material';
 
 const inter = Inter({ subsets: ["latin"] });
 
 export default function Home() {
+  const [itemsList, setItemsList] = useState([]);
+  const [inputValue, setInputValue] = useState('');
+  const [searchValue, setSearchValue] = useState('');
+
+  const theme = useTheme();
+  const isMediumScreen = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Fetch data from Firestore when the component mounts
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "items"), (snapshot) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setItemsList(items);
+      console.log("Initial itemsList: ", items); // Log initial state
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
+
+  const addToList = async () => {
+    const q = query(collection(db, "items"), where("value", "==", inputValue));
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+      querySnapshot.forEach(async (doc) => {
+        const newCount = doc.data().count + 1;
+        await updateDoc(doc.ref, { count: newCount });
+        console.log(`Updated item count for document ${doc.id}`);
+      });
+    } else {
+      const newItem = { value: inputValue, count: 1 };
+      await addDoc(collection(db, "items"), newItem);
+      console.log(`Added new item with value ${inputValue}`);
+    }
+
+    setInputValue(''); // Clear input after adding
+  };
+
+  const removeFromList = async (value) => {
+    // Query Firestore to find the document with the given value
+    const q = query(collection(db, "items"), where("value", "==", value));
+    const querySnapshot = await getDocs(q);
+  
+    if (querySnapshot.empty) {
+      console.error(`No document found with value ${value}`);
+      return;
+    }
+  
+    // Assuming there's only one document with the given value
+    const doc = querySnapshot.docs[0];
+    const docRef = doc.ref;
+  
+    const docSnapshot = await getDoc(docRef);
+  
+    if (docSnapshot.exists()) {
+      const currentCount = docSnapshot.data().count;
+  
+      if (currentCount > 1) {
+        // Decrease count if more than 1
+        await updateDoc(docRef, { count: currentCount - 1 });
+        console.log(`Decreased item count for document with value ${value}`);
+      } else {
+        // Remove the document if count is 1
+        await deleteDoc(docRef);
+        console.log(`Deleted item with value ${value}`);
+      }
+    } else {
+      console.error(`Document with value ${value} does not exist`);
+    }
+  };
+
+  const fetchAllItems = async () => {
+    const snapshot = await getDocs(collection(db, "items"));
+    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setItemsList(items);
+    console.log("Fetched all items: ", items);
+  };
+  
+  const searchList = async () => {
+    if (searchValue.trim() === '') {
+      // If the search query is empty, fetch the full list
+      fetchAllItems();
+    } else {
+      // Otherwise, filter the items based on the search query
+      const filteredItems = itemsList.filter((item) =>
+        item.value.toLowerCase().startsWith(searchValue.toLowerCase())
+      );
+      setItemsList(filteredItems);
+      console.log(filteredItems);
+    }
+  };
+
+  const handleInputChange = (event) => {
+      setInputValue(event.target.value);    
+  };
+
+  const handleSearchChange = (event) => {
+      setSearchValue(event.target.value); 
+  };
+
   return (
     <>
       <Head>
@@ -14,101 +130,77 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <main className={`${styles.main} ${inter.className}`}>
-        <div className={styles.description}>
-          <p>
-            Get started by editing&nbsp;
-            <code className={styles.code}>pages/index.js</code>
-          </p>
-          <div>
-            <a
-              href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              By{" "}
-              <Image
-                src="/vercel.svg"
-                alt="Vercel Logo"
-                className={styles.vercelLogo}
-                width={100}
-                height={24}
-                priority
-              />
-            </a>
-          </div>
-        </div>
-
-        <div className={styles.center}>
-          <Image
-            className={styles.logo}
-            src="/next.svg"
-            alt="Next.js Logo"
-            width={180}
-            height={37}
-            priority
-          />
-        </div>
-
-        <div className={styles.grid}>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
+      <Box>
+        <Box sx={{ flexGrow: 1 }}>
+          <AppBar position="static">
+            <Toolbar>
+              <IconButton
+                size="large"
+                edge="start"
+                color="inherit"
+                aria-label="menu"
+                sx={{ mr: 2 }}
+              >
+                <MenuIcon /> 
+              </IconButton>
+              <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+                News
+              </Typography>
+              <Button color="inherit">Login</Button>
+            </Toolbar>
+          </AppBar>
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: isMediumScreen ? 'column' : 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', flexDirection: 'row' }}>
+          <Box
+            component="form"
+            sx={{
+              '& > :not(style)': { mr: 2, width: '35ch' },
+            }}
+            noValidate
+            autoComplete="off"
           >
-            <h2>
-              Docs <span>-&gt;</span>
-            </h2>
-            <p>
-              Find in-depth information about Next.js features and&nbsp;API.
-            </p>
-          </a>
-
-          <a
-            href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
+            <TextField id="outlined-basic" label="Outlined" variant="outlined" value={inputValue} onChange={handleInputChange} fullWidth />
+          </Box>
+          <Button variant="contained" sx={{ marginY: isMediumScreen ? 2 : 5, paddingY: 2, paddingX: 4 }} onClick={addToList}>Add Item</Button>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          <Box
+            component="form"
+            sx={{
+              '& > :not(style)': { mr: 2, width: '35ch' },
+            }}
+            noValidate
+            autoComplete="off"
           >
-            <h2>
-              Learn <span>-&gt;</span>
-            </h2>
-            <p>
-              Learn about Next.js in an interactive course with&nbsp;quizzes!
-            </p>
-          </a>
-
-          <a
-            href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2>
-              Templates <span>-&gt;</span>
-            </h2>
-            <p>
-              Discover and deploy boilerplate example Next.js&nbsp;projects.
-            </p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2>
-              Deploy <span>-&gt;</span>
-            </h2>
-            <p>
-              Instantly deploy your Next.js site to a shareable URL
-              with&nbsp;Vercel.
-            </p>
-          </a>
-        </div>
-      </main>
+            <TextField id="outlined-basic" label="Outlined" variant="outlined" value={searchValue} onChange={handleSearchChange} fullWidth />
+          </Box>
+          <Button variant="contained" sx={{ marginY: isMediumScreen ? 2 : 5, paddingY: 2, paddingX: 4 }} onClick={searchList}>Search</Button>
+        </Box>
+        </Box>
+        <List
+          sx={{
+            maxWidth: '100%',
+            bgcolor: 'background.paper',
+            position: 'relative',
+            overflow: 'auto',
+            maxHeight: 300,
+            '& ul': { paddingX: isMediumScreen ? 0 : 5 },
+          }}
+          subheader={<li />}
+        >
+          <ul>
+            <ListSubheader>item list</ListSubheader>
+            {itemsList.map((item, index) => (
+              <ListItem key={`item-${item.id}`} sx={{ backgroundColor: index % 2 === 0 ? '#eee' : 'white' }}>
+                <ListItemText primary={`${item.value}`} />
+                <ListItemText secondary={`${item.count}`} />
+                <Button variant="outlined" sx={{ marginY: 1, paddingY: .5, paddingX: 2 }} onClick={() => removeFromList(item.value)}>remove</Button>
+              </ListItem>
+            ))}
+          </ul>
+        </List>
+      </Box>
     </>
   );
 }
