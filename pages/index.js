@@ -16,7 +16,7 @@ import IconButton from '@mui/material/IconButton';
 import MenuIcon from '@mui/icons-material/Menu';
 import TextField from '@mui/material/TextField';
 import { collection, addDoc, updateDoc, query, where, getDocs, doc, deleteDoc, onSnapshot, getDoc } from "firebase/firestore";
-import { db } from './firebase';  // Adjust the path according to your project structure 
+import { db } from '../firebase/firebase';  // Adjust the path according to your project structure 
 import { useMediaQuery, useTheme } from '@mui/material';
 
 const inter = Inter({ subsets: ["latin"] });
